@@ -1,5 +1,7 @@
 # Manifest-Based Agent Composition — Artifact Repository
 
+**Repository:** https://github.com/antonio-marcos1989/manifest-based-agent-composition
+
 Open-source reference implementation for the paper *A Manifest-Based Declarative Approach to AI Agent Composition*.
 
 This repository is a **minimal artifact** focused on the manifest-centric path:
