@@ -40,6 +40,11 @@ public class AgentInvocationMetrics {
         TIMEOUT,
         HTTP_ERROR,
         PARSE,
-        ALA_LATENCY
+        ALA_LATENCY,
+        ALA_CONFIDENCE,
+        ALA_COST,
+        ALA_TOKENS,
+        CONTRACT_INPUT,
+        CONTRACT_OUTPUT
     }
 }

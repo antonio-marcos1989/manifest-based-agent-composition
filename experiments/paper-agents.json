@@ -1,0 +1,190 @@
+{
+  "baseAla": {
+    "maxErrorPercentage": 30,
+    "evaluationWindow": 5,
+    "reliabilityThreshold": 0.7,
+    "strictContract": false
+  },
+  "agents": [
+    {
+      "key": "generative",
+      "name": "mock-component-generative",
+      "description": "Mock GENERATIVE component for paper experiment",
+      "role": "COMPONENT",
+      "type": "GENERATIVE",
+      "path": "/mock/component/generative",
+      "requestPayloadMode": "CHAT_MESSAGES",
+      "defaultModel": "mock-generative-v1",
+      "systemPrompt": "You are a mock generative component. Reply with concise JSON in content.",
+      "capabilities": ["experiment", "generative"],
+      "alaSettings": { "maxLatencyMs": 8000 },
+      "executePayload": { "prompt": "Summarize manifest-based agent composition in one sentence." }
+    },
+    {
+      "key": "classification",
+      "name": "mock-component-classification",
+      "description": "Mock CLASSIFICATION component for paper experiment",
+      "role": "COMPONENT",
+      "type": "CLASSIFICATION",
+      "path": "/mock/component/classification",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "classification"],
+      "alaSettings": {
+        "maxLatencyMs": 5000,
+        "minConfidenceScore": 0.85,
+        "maxEstimatedCost": 0.5,
+        "maxTokensPerInvocation": 100
+      },
+      "inputJsonSchema": {
+        "type": "object",
+        "required": ["feature"],
+        "properties": { "feature": { "type": "string" } }
+      },
+      "outputJsonSchema": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "confidence": { "type": "number" }
+        }
+      },
+      "executePayload": { "feature": "sample-positive-input" }
+    },
+    {
+      "key": "regression",
+      "name": "mock-component-regression",
+      "description": "Mock REGRESSION component for paper experiment",
+      "role": "COMPONENT",
+      "type": "REGRESSION",
+      "path": "/mock/component/regression",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "regression"],
+      "alaSettings": { "maxLatencyMs": 5000 },
+      "inputJsonSchema": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "number" } }
+      },
+      "outputJsonSchema": {
+        "type": "object",
+        "properties": { "prediction": { "type": "number" } }
+      },
+      "executePayload": { "value": 2.4 }
+    },
+    {
+      "key": "alaEvaluator",
+      "name": "mock-component-ala-evaluator",
+      "description": "COMPONENT that diagnoses ALA infringements from execution snapshots",
+      "role": "COMPONENT",
+      "type": "CLASSIFICATION",
+      "path": "/mock/component/ala-evaluator",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "ala-diagnosis"],
+      "alaSettings": { "maxLatencyMs": 5000 },
+      "inputJsonSchema": {
+        "type": "object",
+        "required": ["execution"],
+        "properties": {
+          "execution": { "type": "object" },
+          "alaSettings": { "type": "object" },
+          "recentInvocations": { "type": "array" }
+        }
+      },
+      "executePayload": null
+    },
+    {
+      "key": "referee",
+      "name": "mock-referee",
+      "description": "Mock REFEREE for semantic audit in paper experiment",
+      "role": "REFEREE",
+      "type": "GENERATIVE",
+      "path": "/mock/referee",
+      "requestPayloadMode": "CHAT_MESSAGES",
+      "defaultModel": "mock-referee-v1",
+      "systemPrompt": "You are a REFEREE. Return JSON with approved, reasoning, violations.",
+      "forceJsonResponse": true,
+      "capabilities": ["experiment", "audit"],
+      "alaSettings": { "maxLatencyMs": 8000, "maxErrorPercentage": 20 },
+      "executePayload": {
+        "objective": "Validate manifest dispatch under ALA constraints",
+        "taskTitle": "paper-functional-experiment"
+      }
+    },
+    {
+      "key": "observer",
+      "name": "mock-observer",
+      "description": "Mock OBSERVER for explainability in paper experiment",
+      "role": "OBSERVER",
+      "type": "GENERATIVE",
+      "path": "/mock/observer",
+      "requestPayloadMode": "CHAT_MESSAGES",
+      "defaultModel": "mock-observer-v1",
+      "systemPrompt": "You are an OBSERVER. Explain execution metrics and ALA compliance.",
+      "capabilities": ["experiment", "explainability"],
+      "alaSettings": { "maxLatencyMs": 8000, "maxErrorPercentage": 25 },
+      "executePayload": null
+    },
+    {
+      "key": "classificationSlow",
+      "name": "mock-component-classification-slow",
+      "description": "CLASSIFICATION component with tight ALA to demonstrate latency violation",
+      "role": "COMPONENT",
+      "type": "CLASSIFICATION",
+      "path": "/mock/component/classification",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "ala-violation-demo"],
+      "alaSettings": { "maxLatencyMs": 300 },
+      "executePayload": { "feature": "slow-path", "_mockDelayMs": 1200 }
+    },
+    {
+      "key": "classificationLowConfidence",
+      "name": "mock-component-classification-low-confidence",
+      "description": "CLASSIFICATION with strict minConfidenceScore ALA",
+      "role": "COMPONENT",
+      "type": "CLASSIFICATION",
+      "path": "/mock/component/classification",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "ala-confidence-demo"],
+      "alaSettings": {
+        "maxLatencyMs": 5000,
+        "minConfidenceScore": 0.95
+      },
+      "inputJsonSchema": {
+        "type": "object",
+        "required": ["feature"],
+        "properties": { "feature": { "type": "string" } }
+      },
+      "outputJsonSchema": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "confidence": { "type": "number" }
+        }
+      },
+      "executePayload": { "feature": "low-confidence", "_mockConfidence": 0.4 }
+    },
+    {
+      "key": "classificationProviderB",
+      "name": "mock-component-classification-provider-b",
+      "description": "Same manifest schema targeting alternate mock provider endpoint",
+      "role": "COMPONENT",
+      "type": "CLASSIFICATION",
+      "path": "/mock/provider-b/classification",
+      "requestPayloadMode": "DIRECT_JSON",
+      "capabilities": ["experiment", "portability"],
+      "alaSettings": { "maxLatencyMs": 5000, "minConfidenceScore": 0.85 },
+      "inputJsonSchema": {
+        "type": "object",
+        "required": ["feature"],
+        "properties": { "feature": { "type": "string" } }
+      },
+      "outputJsonSchema": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "confidence": { "type": "number" }
+        }
+      },
+      "executePayload": { "feature": "provider-b-input" }
+    }
+  ]
+}

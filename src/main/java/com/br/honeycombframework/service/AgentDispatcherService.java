@@ -2,6 +2,11 @@ package com.br.honeycombframework.service;
 
 import com.br.honeycombframework.agent.AgentResponseParser;
 import com.br.honeycombframework.agent.ParsedAgentResponse;
+import com.br.honeycombframework.governance.AgentContractValidator;
+import com.br.honeycombframework.governance.AlaComplianceEvaluator;
+import com.br.honeycombframework.governance.AlaComplianceEvaluator.AlaComplianceResult;
+import com.br.honeycombframework.governance.ContractValidationResult;
+import com.br.honeycombframework.governance.DispatchInputSupport;
 import com.br.honeycombframework.governance.AgentCredentialSupport;
 import com.br.honeycombframework.governance.AgentPersonaSupport;
 import com.br.honeycombframework.governance.RoleGovernancePolicy;
@@ -15,6 +20,7 @@ import com.br.honeycombframework.model.ExecutionStreamEvent.EventType;
 import com.br.honeycombframework.repository.AgentExecutionLogQuery;
 import com.br.honeycombframework.repository.AgentExecutionLogRepository;
 import com.br.honeycombframework.repository.AgentManifestRepository;
+import com.br.honeycombframework.exception.ValidationException;
 import com.br.honeycombframework.orchestrator.ExecutionTraceContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -67,11 +73,17 @@ public class AgentDispatcherService {
 
         RoleGovernancePolicy.validateBeforeDispatch(agent);
 
+        Map<String, Object> sanitizedInput = DispatchInputSupport.sanitizeForContractAndDispatch(inputData);
+        ContractValidationResult inputContract = AgentContractValidator.validateInput(agent, sanitizedInput);
+        if (!inputContract.isCompliant()) {
+            throw new ValidationException(String.join("; ", inputContract.getViolations()));
+        }
+
         publishAgentEvent(EventType.AGENT_STARTED, agent, goalId, taskId, null, null,
                 "Invocando agente " + agent.getName() + "…");
 
         long startTime = System.currentTimeMillis();
-        long inputSize = estimatePayloadSize(inputData);
+        long inputSize = estimatePayloadSize(sanitizedInput);
 
         try {
             AgentHttpExchange exchange = invokeAgentHttp(agent, inputData, GptOssTuning.initial());
@@ -83,33 +95,50 @@ public class AgentDispatcherService {
             int httpStatus = exchange.httpStatus();
             String rawBody = exchange.rawBody();
             ParsedAgentResponse parsed = exchange.parsed();
+            Object dispatchData = resolveDispatchData(parsed.getData(), rawBody);
 
             AgentInvocationMetrics metrics = mergeMetrics(
                     parsed.getMetrics(), latency, httpStatus, agent, rawBody);
 
-            boolean alaOk = isAlaCompliant(agent, metrics);
+            List<String> contractViolations = new ArrayList<>();
+            ContractValidationResult outputContract = AgentContractValidator.validateOutput(agent, dispatchData);
+            if (!outputContract.isCompliant()) {
+                contractViolations.addAll(outputContract.getViolations());
+                metrics.setErrorType(AgentInvocationMetrics.ErrorType.CONTRACT_OUTPUT);
+            }
+
+            AlaComplianceResult alaResult = AlaComplianceEvaluator.evaluate(agent, metrics);
+            boolean alaOk = alaResult.compliant() && contractViolations.isEmpty();
             metrics.setAlaCompliant(alaOk);
-            metrics.setStatus(alaOk ? "SUCCESS" : "ALA_LATENCY_VIOLATION");
-            if (!alaOk) {
-                metrics.setErrorType(AgentInvocationMetrics.ErrorType.ALA_LATENCY);
+
+            String status;
+            if (!contractViolations.isEmpty()) {
+                status = "CONTRACT_OUTPUT_VIOLATION";
+            } else if (!alaResult.compliant()) {
+                status = alaResult.status();
+                metrics.setErrorType(alaResult.primaryError());
             } else {
+                status = "SUCCESS";
                 metrics.setErrorType(AgentInvocationMetrics.ErrorType.NONE);
             }
+            metrics.setStatus(status);
 
             saveLog(agent, goalId, taskId, metrics, parsed.getExplanation(), inputSize);
 
-            publishAgentEvent(EventType.AGENT_COMPLETED, agent, goalId, taskId, latency, "SUCCESS",
+            publishAgentEvent(EventType.AGENT_COMPLETED, agent, goalId, taskId, latency, status,
                     "Agente " + agent.getName() + " concluído (" + latency + " ms)");
 
             ExecutionResponse response = ExecutionResponse.builder()
                     .agentId(agent.getId())
-                    .data(resolveDispatchData(parsed.getData(), rawBody))
+                    .data(dispatchData)
                     .latencyMs(latency)
                     .alaCompliant(alaOk)
-                    .status(metrics.getStatus())
+                    .status(status)
                     .httpStatusCode(httpStatus)
                     .metrics(metrics)
                     .agentExplanation(parsed.getExplanation())
+                    .alaViolations(alaResult.violations())
+                    .contractViolations(contractViolations)
                     .build();
 
             checkAgentHealth(agentId);
@@ -164,35 +193,38 @@ public class AgentDispatcherService {
         return metrics;
     }
 
-    private boolean isAlaCompliant(AgentManifest agent, AgentInvocationMetrics metrics) {
-        Integer maxLatencyMs = RoleGovernancePolicy.effectiveMaxLatencyMs(agent);
-        if (maxLatencyMs == null || metrics.getLatencyMs() == null) {
-            return true;
-        }
-        return metrics.getLatencyMs() <= maxLatencyMs;
-    }
-
     private void checkAgentHealth(String agentId) {
         AgentManifest agent = manifestRepository.findById(agentId).orElse(null);
-        if (agent == null || agent.getAlaSettings() == null || agent.getAlaSettings().getMaxErrorPercentage() == null) {
+        if (agent == null || agent.getAlaSettings() == null) {
             return;
         }
 
         int window = RoleGovernancePolicy.effectiveEvaluationWindow(agent);
-        double maxErrorPercentage = RoleGovernancePolicy.effectiveMaxErrorPercentage(agent);
-
         List<AgentExecutionLog> recentLogs = executionLogQuery.findRecentByAgentId(agentId, window);
-
-        if (recentLogs.size() < window) {
+        if (recentLogs.isEmpty()) {
             return;
         }
 
         long violations = recentLogs.stream().filter(log -> !Boolean.TRUE.equals(log.getAlaCompliant())).count();
         double errorRate = ((double) violations / recentLogs.size()) * 100;
 
-        if (errorRate >= maxErrorPercentage) {
-            agent.setActive(false);
-            manifestRepository.save(agent);
+        Double maxErrorPercentage = agent.getAlaSettings().getMaxErrorPercentage();
+        if (maxErrorPercentage != null && recentLogs.size() >= window) {
+            double effectiveMaxError = RoleGovernancePolicy.effectiveMaxErrorPercentage(agent);
+            if (errorRate >= effectiveMaxError) {
+                agent.setActive(false);
+                manifestRepository.save(agent);
+                return;
+            }
+        }
+
+        Double reliabilityThreshold = RoleGovernancePolicy.effectiveReliabilityThreshold(agent);
+        if (reliabilityThreshold != null && recentLogs.size() >= window) {
+            double reliability = ((double) (recentLogs.size() - violations) / recentLogs.size());
+            if (reliability < reliabilityThreshold) {
+                agent.setActive(false);
+                manifestRepository.save(agent);
+            }
         }
     }
 

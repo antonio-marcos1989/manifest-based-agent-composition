@@ -1,9 +1,10 @@
 {
   "name": "manifest-artifact-experiments",
   "private": true,
-  "version": "1.0.0",
-  "description": "Mock agent and experiment helpers",
+  "version": "1.1.0",
+  "description": "Mock agents (all roles/types) and paper experiment scripts",
   "scripts": {
-    "mock-agent": "node mock-agent/server.js"
+    "mock-agent": "node mock-agent/server.js",
+    "experiment": "powershell -NoProfile -ExecutionPolicy Bypass -File ./run-functional-experiment.ps1"
   }
 }

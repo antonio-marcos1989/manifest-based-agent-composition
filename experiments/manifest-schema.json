@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manifest-based-agent-composition/schema/manifest.json",
+  "title": "AgentManifest",
+  "type": "object",
+  "required": ["name", "role", "endpointUrl"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "role": { "enum": ["COMPONENT", "REFEREE", "OBSERVER", "HUNTER"] },
+    "type": { "enum": ["GENERATIVE", "CLASSIFICATION", "REGRESSION"] },
+    "endpointUrl": { "type": "string", "format": "uri" },
+    "active": { "type": "boolean", "default": true },
+    "requestPayloadMode": { "enum": ["DIRECT_JSON", "CHAT_MESSAGES"] },
+    "defaultModel": { "type": "string" },
+    "systemPrompt": { "type": "string" },
+    "forceJsonResponse": { "type": "boolean" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "inputJsonSchema": { "type": "object" },
+    "outputJsonSchema": { "type": "object" },
+    "alaSettings": {
+      "type": "object",
+      "properties": {
+        "maxLatencyMs": { "type": "integer", "minimum": 1 },
+        "maxErrorPercentage": { "type": "number", "minimum": 0, "maximum": 100 },
+        "evaluationWindow": { "type": "integer", "minimum": 1 },
+        "reliabilityThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "strictContract": { "type": "boolean" },
+        "minConfidenceScore": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxEstimatedCost": { "type": "number", "minimum": 0 },
+        "maxTokensPerInvocation": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -115,4 +115,40 @@ public final class RoleGovernancePolicy {
             case OBSERVER, COMPONENT -> base;
         };
     }
+
+    public static Double effectiveMinConfidenceScore(AgentManifest agent) {
+        if (agent.getAlaSettings() == null || agent.getAlaSettings().getMinConfidenceScore() == null) {
+            return null;
+        }
+        double base = agent.getAlaSettings().getMinConfidenceScore();
+        if (agent.getRole() == null) {
+            return base;
+        }
+        return switch (agent.getRole()) {
+            case REFEREE -> Math.min(1.0, base + 0.05);
+            case OBSERVER -> Math.min(1.0, base + 0.02);
+            case HUNTER, COMPONENT -> base;
+        };
+    }
+
+    public static Double effectiveMaxEstimatedCost(AgentManifest agent) {
+        if (agent.getAlaSettings() == null) {
+            return null;
+        }
+        return agent.getAlaSettings().getMaxEstimatedCost();
+    }
+
+    public static Integer effectiveMaxTokensPerInvocation(AgentManifest agent) {
+        if (agent.getAlaSettings() == null || agent.getAlaSettings().getMaxTokensPerInvocation() == null) {
+            return null;
+        }
+        return agent.getAlaSettings().getMaxTokensPerInvocation();
+    }
+
+    public static Double effectiveReliabilityThreshold(AgentManifest agent) {
+        if (agent.getAlaSettings() == null) {
+            return null;
+        }
+        return agent.getAlaSettings().getReliabilityThreshold();
+    }
 }

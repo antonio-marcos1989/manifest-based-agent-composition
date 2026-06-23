@@ -40,9 +40,26 @@ Environment variables:
 |----------|---------|
 | `MONGODB_URI` | `mongodb://localhost:27017/manifest-composition` |
 
-## Functional experiment (offline mock agent)
+## Functional experiment (mock agent farm)
 
-Terminal 1 — mock classification/regression HTTP agent:
+The experiment covers **every role and type** used in the paper metamodel, plus an ALA diagnostic component:
+
+| Role | Type | Mock route | Purpose |
+|------|------|------------|---------|
+| COMPONENT | GENERATIVE | `/mock/component/generative` | `CHAT_MESSAGES` dispatch |
+| COMPONENT | CLASSIFICATION | `/mock/component/classification` | `DIRECT_JSON` ML-style API |
+| COMPONENT | REGRESSION | `/mock/component/regression` | numeric prediction |
+| COMPONENT | CLASSIFICATION | `/mock/component/ala-evaluator` | **ALA diagnosis** from execution snapshots |
+| REFEREE | GENERATIVE | `/mock/referee` | audit (`approved`, `violations`) |
+| OBSERVER | GENERATIVE | `/mock/observer` | explainability narrative |
+
+An extra manifest (`mock-component-classification-slow`) uses `_mockDelayMs` with a tight `maxLatencyMs` to **trigger a latency ALA violation**; `mock-component-classification-low-confidence` stresses **confidence ALA**; `mock-component-classification-provider-b` demonstrates **endpoint portability** (alternate mock URL, same manifest schema). The ALA evaluator diagnoses infringements from execution snapshots.
+
+The eight-phase script also verifies **contract rejection** (invalid input → HTTP 400) and ships a minimal **imperative baseline** in `experiments/baseline-imperative/` for integration-cost comparison.
+
+Normative manifest schema: `experiments/manifest-schema.json`.
+
+Terminal 1 — mock farm (port 9090):
 
 ```bash
 cd experiments
@@ -50,25 +67,29 @@ npm install
 npm run mock-agent
 ```
 
-Terminal 2 — API (if not already running):
+Terminal 2 — API (port 8081):
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Terminal 3 — automated smoke flow:
+Terminal 3 — full experiment:
 
 ```powershell
 cd experiments
 .\run-functional-experiment.ps1
+# skip slow ALA demo:
+.\run-functional-experiment.ps1 -SkipSlowAlaDemo
 ```
 
-The script:
+The script (`paper-agents.json` drives registration):
 
-1. registers a `CLASSIFICATION` manifest pointing to `http://localhost:9090`
-2. calls `POST /api/v1/execute/{agentId}`
-3. fetches `/metrics` and `/invocations`
-4. prints a short summary (latency, ALA flag, log count)
+1. registers all manifests
+2. executes GENERATIVE / CLASSIFICATION / REGRESSION components
+3. runs the slow classifier to violate ALA latency (unless `-SkipSlowAlaDemo`)
+4. invokes the **ALA evaluator** with execution + recent logs
+5. invokes REFEREE and OBSERVER on the experiment context
+6. prints a summary table (status, `alaCompliant`, latency)
 
 Reset MongoDB collections between runs:
 
