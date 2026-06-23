@@ -1,0 +1,82 @@
+{
+  "info": {
+    "name": "Manifest Catalog (paper artifact)",
+    "description": "Manifest-centric flow for the reference implementation artifact.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    { "key": "agentId", "value": "" },
+    { "key": "ollamaApiKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1 - Register mock classifier",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"mock-classifier\",\n  \"description\": \"Mock classification agent\",\n  \"role\": \"COMPONENT\",\n  \"type\": \"CLASSIFICATION\",\n  \"endpointUrl\": \"http://localhost:9090\",\n  \"active\": true,\n  \"requestPayloadMode\": \"DIRECT_JSON\",\n  \"capabilities\": [\"experiment\"],\n  \"alaSettings\": {\n    \"maxLatencyMs\": 5000,\n    \"maxErrorPercentage\": 30,\n    \"evaluationWindow\": 5,\n    \"reliabilityThreshold\": 0.7,\n    \"strictContract\": false\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/manifests"
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "if (pm.response.code === 201) {",
+            "  pm.collectionVariables.set('agentId', pm.response.json().id);",
+            "}"
+          ],
+          "type": "text/javascript"
+        }
+      }]
+    },
+    {
+      "name": "2 - Test connection",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"manifest\": {\n    \"name\": \"mock-classifier-probe\",\n    \"role\": \"COMPONENT\",\n    \"type\": \"CLASSIFICATION\",\n    \"endpointUrl\": \"http://localhost:9090\",\n    \"requestPayloadMode\": \"DIRECT_JSON\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/manifests/test-connection"
+      }
+    },
+    {
+      "name": "3 - Execute agent",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"feature\": \"sample-input\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/execute/{{agentId}}"
+      }
+    },
+    {
+      "name": "4 - Metrics",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/manifests/{{agentId}}/metrics?window=10"
+      }
+    },
+    {
+      "name": "5 - Invocations",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/manifests/{{agentId}}/invocations?limit=10"
+      }
+    },
+    {
+      "name": "6 - List manifests",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/manifests"
+      }
+    }
+  ]
+}

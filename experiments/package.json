@@ -1,0 +1,9 @@
+{
+  "name": "manifest-artifact-experiments",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mock agent and experiment helpers",
+  "scripts": {
+    "mock-agent": "node mock-agent/server.js"
+  }
+}
